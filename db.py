@@ -1,6 +1,6 @@
-from sqlalchemy import create_engine 
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker, relationship, joinedload, Session
 from sqlalchemy import Date, func
 from sqlalchemy import ForeignKey, Table, Column, String, Integer, CHAR, JSON
 
@@ -10,12 +10,27 @@ engine = create_engine(DATABASE_URL, echo=True)
 
 Base = declarative_base()
 
+# Session class
+Session = sessionmaker(bind=engine)
+# Creating one session instance because only this app works with database,
+# so every change is created in this session instance. 
+# In case of multiple acesses to the database better create new session 
+# when calling endpoint
+
+
+def get_session():
+    db = Session()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # Association table (Many to Many)
 user_task_association = Table(
     'user_task_association', 
     Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.user_id'), primary_key=True),
-    Column('task_id', Integer, ForeignKey('tasks.task_id'), primary_key=True)
+    Column('user_id', Integer, ForeignKey('users.user_id', ondelete='CASCADE'), primary_key=True),
+    Column('task_id', Integer, ForeignKey('tasks.task_id', ondelete='CASCADE'), primary_key=True)
 )
 
 class UserT(Base):
@@ -24,9 +39,10 @@ class UserT(Base):
     user_name = Column('user_name', String)
 
     # Many-to-Many relationship. User can be assigned to many tasks 
-    assigned_tasks = relationship('TaskT', secondary=user_task_association, back_populates='assigned_users')
+    # lazy='joined' used to reload relations every time form database
+    assigned_tasks = relationship('TaskT', secondary=user_task_association, back_populates='assigned_users', lazy='joined')
     # One-to-Many relationship. User can create many tasks
-    owned_tasks = relationship('TaskT', back_populates='task_owner')
+    owned_tasks = relationship('TaskT', back_populates='task_owner', lazy='joined', cascade='all, delete-orphan')
 
     def __init__(self, user_name):
         self.user_name = user_name
@@ -40,7 +56,7 @@ class TaskT(Base):
     task_id = Column('task_id', Integer, primary_key=True, autoincrement=True)
 
     # TODO: IDK if i need created_by_user_id - this can be obtained from 'task_owner.user_id' in FastAPI
-    created_by_user_id = Column('created_by', Integer, ForeignKey('users.user_id'))
+    created_by_user_id = Column('created_by', Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=True)
     start_date = Column('start_date', Date, server_default=func.now())
     end_date = Column('end_time', Date, nullable=True)
     title = Column('title', String)
@@ -48,9 +64,9 @@ class TaskT(Base):
     # comments = Column('comments', JSON, nullable=True)
     
     # Many_to_Many relationship. Task can have assigned multiple users
-    assigned_users = relationship('UserT', secondary=user_task_association, back_populates='assigned_tasks')
+    assigned_users = relationship('UserT', secondary=user_task_association, back_populates='assigned_tasks', lazy='joined')
     # Many-to-One relationship. Task can have only one creator
-    task_owner = relationship('UserT', back_populates='owned_tasks')
+    task_owner = relationship('UserT', back_populates='owned_tasks', lazy='joined')
 
     def __init__(self, created_by_user_id, title, description = None):
         self.created_by_user_id = created_by_user_id
@@ -74,16 +90,11 @@ class CommitHandler():
 
 # Create columns
 Base.metadata.create_all(bind=engine)
-# Session class
-Session = sessionmaker(bind=engine)
-# Creating one session instance because only this app works with database,
-# so every change is created in this session instance. 
-# In case of multiple acesses to the database better create new session 
-# when calling endpoint
-session = Session()
+
 # TODO: Create object for safe error rising 
 # CommitHandler(session=session)
 
+# session = Session()
 # user1 = UserT('Wojtek')
 # user2 = UserT('Piotr')
 # task1 = TaskT(1, 'Task 1')
@@ -101,8 +112,8 @@ session = Session()
 
 # session.commit()
 
-results = session.query(TaskT).all()
-print(results)
-results = session.query(UserT).all()
-print(results)
+# results = session.query(TaskT).all()
+# print(results)
+# results = session.query(UserT).all()
+# print(results)
 
