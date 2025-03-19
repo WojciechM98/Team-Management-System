@@ -1,8 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, joinedload, Session
-from sqlalchemy import Date, func
+from sqlalchemy import Date, func, null, select, exists
 from sqlalchemy import ForeignKey, Table, Column, String, Integer, CHAR, JSON
+import datetime
 
 DATABASE_URL = 'postgresql://postgres:1234@localhost/postgres'
 
@@ -33,6 +34,11 @@ user_task_association = Table(
     Column('task_id', Integer, ForeignKey('tasks.task_id', ondelete='CASCADE'), primary_key=True)
 )
 
+def create_comment(user_id: int, comment: str):
+    return {'user_id': user_id,
+            'timestamp': func.now(),
+            'comment': comment}
+
 class UserT(Base):
     __tablename__ = 'users'
     user_id = Column('user_id', Integer, primary_key=True, autoincrement=True)
@@ -42,6 +48,7 @@ class UserT(Base):
     # lazy='joined' used to reload relations every time form database
     assigned_tasks = relationship('TaskT', secondary=user_task_association, back_populates='assigned_users', lazy='joined')
     # One-to-Many relationship. User can create many tasks
+    # Note: Deleting a user deletes the tasks he created
     owned_tasks = relationship('TaskT', back_populates='task_owner', lazy='joined', cascade='all, delete-orphan')
 
     def __init__(self, user_name):
@@ -61,7 +68,7 @@ class TaskT(Base):
     end_date = Column('end_time', Date, nullable=True)
     title = Column('title', String)
     description = Column('description', String, nullable=True)
-    # comments = Column('comments', JSON, nullable=True)
+    comments = Column('comments', JSON, nullable=True)
     
     # Many_to_Many relationship. Task can have assigned multiple users
     assigned_users = relationship('UserT', secondary=user_task_association, back_populates='assigned_tasks', lazy='joined')
