@@ -39,24 +39,30 @@ class UserDelete(UserBase):
                                 'Tasks created by the user were deleted along with the user', 
                         description='Information about succesfull operation')
 
+# Comment table models
+class CommentBase(BaseModel):
+    task_id: int = Field(..., description='ID of a parent task')
+    timestamp: datetime.datetime = Field(..., description='Date and time when comment was added')
+    comment: str = Field(..., description='Comment body')
+
+class Comment(CommentBase):
+    comment_id: int = Field(..., description='ID of a comment')
+
+
 # Task table models
 class TaskBase(BaseModel):
+
     class AssignedUsers(BaseModel):
         user_id: Optional[int] = Field(None, description='ID of a user')
         user_name: Optional[str] = Field(None, description='Name of a user')
 
-    class Comment(BaseModel):
-        user_id: int = Field(..., description='ID of a user')
-        timestamp: datetime.date = Field(..., description='Timestamp when comment was created')
-        comment: str = Field(..., description='User comment')
-
     title: str = Field(...,min_length=5, max_length=512, description='Title of a task')
-    created_by_user_id: int = Field(..., description='ID of the user who created this task')
+    owner_id: int = Field(..., description='ID of the user who created this task')
     start_date: Optional[datetime.date] = Field(None, description='Task start date. '
                                                 'The default start date is the date task was created')
     end_date: Optional[datetime.date] = Field(None, description='Task end date')
     description: Optional[str] = Field(None, description='Description of a task')
-    comments: Optional[Comment] = Field(None, description='Task comments created by users')
+    comments: Optional[List[Comment]] = Field(None, description='Task comments created by users')
     assigned_users: Optional[List[AssignedUsers]] = Field(None, description='Users assigned to the task')
     
 class Task(TaskBase):
@@ -68,6 +74,9 @@ class TaskAdd(TaskBase):
 class TaskDelete(Task):
     detail: str = Field(default='The task deletion operation has been performed successfully', 
                       description='Information about succesfull operation')
+
+
+
 
 
 app = FastAPI()
@@ -114,6 +123,7 @@ def delete_user(user_id: int, instance: Session = Depends(db.get_session)):
 def get_tasks(instance: Session = Depends(db.get_session)):
     """Return all tasks"""
     tasks = instance.query(db.TaskT).all()
+    print(tasks)
     return tasks
 
 @app.get('/tasks/{task_id}', response_model=Task)
@@ -128,9 +138,9 @@ def get_task(task_id: int, instance: Session = Depends(db.get_session)):
     return result
 
 @app.post('/tasks/add', response_model=Task)
-def add_task(task: TaskAdd, instance: Session = Depends(db.get_session)):
+def add_task(user_id: int, title: str, description: str = None, instance: Session = Depends(db.get_session)):
     """Add new task"""
-    new_task = db.TaskT(created_by_user_id=task.created_by_user_id, title=task.title)
+    new_task = db.TaskT(user_id, title, description)
     instance.add(new_task)
     instance.commit()
     instance.refresh(new_task)
@@ -148,24 +158,26 @@ def delete_task(task_id: int, instance: Session = Depends(db.get_session)):
         raise HTTPException(status_code=404, detail='User not found. Operation rejected.')
     return result
 
-@app.post('/task/addcomment', response_model=Task)
-def comment_task(user_id: int, task_id: int, instance: Session = Depends(db.get_session)):
+@app.post('/task/addcomment', response_model=Comment)
+def comment_task(user_id: int, task_id: int, comment: str, instance: Session = Depends(db.get_session)):
     user = instance.execute(db.select(db.UserT).where(db.UserT.user_id == user_id)).scalar()
-    print(f'\n\nUser: {user}')
+    # Checking if user exist
     if user is None:
         raise HTTPException(status_code=404, detail='User not found. Operation rejected.')
     task = instance.execute(db.select(db.TaskT).where(db.TaskT.task_id == task_id)).scalar()
-    print(f'\n\nTask: {task}')
+    # Checking if task exist
     if task is None:
         raise HTTPException(status_code=404, detail='Task not found. Operation rejected.')
+    # Checking if user owns or is assigned to task - only if user can comment
     is_assigned = [t.task_id for t in user.assigned_tasks if t.task_id == task.task_id]
     is_owned = [t.task_id for t in user.owned_tasks if t.task_id == task.task_id]
-    
-    if is_owned or is_assigned:
-        print('Can comment!')
-    else:
-        raise HTTPException(status_code=40, detail='Permission denied. You are not assigned to this tasks')
-    print(f'Is assigned: {is_assigned}')
-    print(f'Is owned: {is_owned}')
+    if not (is_owned or is_assigned):
+        raise HTTPException(status_code=403, detail='Permission denied. This user does not have permission to comment this task')
+    # Creating new comment, appending it to relationships list in task.comments finally commit
+    new_comment = db.CommentT(task_id, comment)
+    task.comments.append(new_comment)
+    instance.add(task)
+    instance.commit()
+    return new_comment
 
    
