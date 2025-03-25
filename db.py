@@ -1,8 +1,10 @@
-from sqlalchemy import create_engine 
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy import Date, func
+from sqlalchemy.orm import sessionmaker, Mapped, mapped_column, relationship, joinedload, Session
+from sqlalchemy import Date, DateTime, func, null, select, exists, insert, update
 from sqlalchemy import ForeignKey, Table, Column, String, Integer, CHAR, JSON
+from typing import Optional, List
+import datetime
 
 DATABASE_URL = 'postgresql://postgres:1234@localhost/postgres'
 
@@ -10,62 +12,102 @@ engine = create_engine(DATABASE_URL, echo=True)
 
 Base = declarative_base()
 
+# Session class
+Session = sessionmaker(bind=engine)
+# Creating one session instance because only this app works with database,
+# so every change is created in this session instance. 
+# In case of multiple acesses to the database better create new session 
+# when calling endpoint
+
+
+def get_session():
+    db = Session()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # Association table (Many to Many)
 user_task_association = Table(
     'user_task_association', 
     Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.user_id'), primary_key=True),
-    Column('task_id', Integer, ForeignKey('tasks.task_id'), primary_key=True)
-)
+    Column('user_id', Integer, ForeignKey('users.user_id', ondelete='CASCADE'), primary_key=True),
+    Column('task_id', Integer, ForeignKey('tasks.task_id', ondelete='CASCADE'), primary_key=True))
 
 class UserT(Base):
     __tablename__ = 'users'
-    user_id = Column('user_id', Integer, primary_key=True, autoincrement=True)
-    user_name = Column('user_name', String)
+    user_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_name: Mapped[str]
+    email: Mapped[Optional[str]]
 
     # Many-to-Many relationship. User can be assigned to many tasks 
-    assigned_tasks = relationship('TaskT', secondary=user_task_association, back_populates='assigned_users')
+    # lazy='joined' used to reload relations every time form database
+    assigned_tasks: Mapped[Optional[List['TaskT']]] = relationship(secondary=user_task_association, back_populates='assigned_users', lazy='joined')
     # One-to-Many relationship. User can create many tasks
-    owned_tasks = relationship('TaskT', back_populates='task_owner')
+    # Note: Deleting a user deletes the tasks he created
+    owned_tasks: Mapped[Optional[List['TaskT']]] = relationship(back_populates='task_owner', lazy='joined', cascade='all, delete-orphan')
 
+    # TODO: Create reletionship for Assigned tasks (done), Owned tasks (done), Comments (todo) to make for
+    # future GUI app easier to search for assigned and created things. Maybe after loging create instance 
+    # of a user with easy access to relationships and nested informations (comments etc.). Maybe create 
+    # new endpoint get_user_info and return every information, every relationship for this specific user.
+    
     def __init__(self, user_name):
         self.user_name = user_name
 
     def __repr__(self):
-        tasks_info = [(task.task_id, task.title) for task in self.owned_tasks]
-        return f'<User (user ID: {self.user_id}, user name: {self.user_name}, user owned tasks: {tasks_info}, user assigned tasks: {[task.task_id for task in self.assigned_tasks]})>'
+        owned = [(task.task_id, task.title) for task in self.owned_tasks]
+        assigned = [task.task_id for task in self.assigned_tasks]
+        return f'<User (user ID: {self.user_id}, user name: {self.user_name}, user owned tasks: {owned}, user assigned tasks: {assigned})>\n'
 
 class TaskT(Base):
     __tablename__ = 'tasks'
-    task_id = Column('task_id', Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    # TODO: IDK if i need created_by_user_id - this can be obtained from 'task_owner.user_id' in FastAPI
-    created_by_user_id = Column('created_by', Integer, ForeignKey('users.user_id'))
-    start_date = Column('start_date', Date, server_default=func.now())
-    end_date = Column('end_time', Date, nullable=True)
-    title = Column('title', String)
-    description = Column('description', String, nullable=True)
-    # comments = Column('comments', JSON, nullable=True)
+    # TODO: IDK if i need owner_id - this can be obtained from 'task_owner.user_id' in FastAPI
+    owner_id: Mapped[int] = mapped_column(ForeignKey('users.user_id', ondelete='CASCADE'))
+    start_date: Mapped[datetime.date] = mapped_column(server_default=func.now())
+    end_date: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)
+    title: Mapped[str]
+    description: Mapped[str] = mapped_column(nullable=True)
+    comments: Mapped[Optional[List['CommentT']]] = relationship(cascade='all, delete-orphan')
     
-    # Many_to_Many relationship. Task can have assigned multiple users
-    assigned_users = relationship('UserT', secondary=user_task_association, back_populates='assigned_tasks')
     # Many-to-One relationship. Task can have only one creator
-    task_owner = relationship('UserT', back_populates='owned_tasks')
+    task_owner: Mapped['UserT'] = relationship(back_populates='owned_tasks', lazy='joined')
+    # Many_to_Many relationship. Task can have assigned multiple users
+    assigned_users: Mapped[Optional[List['UserT']]] = relationship(secondary=user_task_association, back_populates='assigned_tasks', lazy='joined')
 
-    def __init__(self, created_by_user_id, title, description = None):
-        self.created_by_user_id = created_by_user_id
+    def __init__(self, user_id, title, description = None):
+        self.owner_id = user_id
         self.title = title
         self.description = description
 
     # TODO: Function to set date for end_date and optionaly for start_date
     def set_date(self):
-        end_date = func.now()
+        return func.now()
 
     def __repr__(self):
-        created_by = f'{self.task_owner.user_id} {self.task_owner.user_name}'
-        return (f'<Task (title: {self.title}, task ID: {self.task_id}, '
+        assigned = [user.user_id for user in self.assigned_users]
+        return (f'<Task (task ID: {self.task_id}, title: {self.title}, description: {self.description}, '
                 f'start date: {self.start_date}, end date: {self.end_date}, '
-                f'created by user: {self.created_by_user_id})>\n')
+                f'owner: {self.owner_id}, assigned users: {assigned}, '
+                f'comments: {self.comments})>\n')
+
+class CommentT(Base):
+    __tablename__ = "comments"
+    comment_id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey('tasks.task_id', ondelete='CASCADE'))
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.user_id', ondelete='CASCADE'))
+    timestamp: Mapped[datetime.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+    comment: Mapped[str]
+
+    def __init__(self, user_id: int, task_id: int, comment: str):
+        self.user_id = user_id
+        self.task_id = task_id
+        self.comment = comment
+    
+    def __repr__(self):
+        return f'<Comment (id: {self.comment_id}, task_id: {self.task_id}, timestamp: {self.timestamp}, comment: {self.comment})>\n'
 
 # TODO: Create error hangler for commiting changes 
 class CommitHandler():
@@ -74,35 +116,13 @@ class CommitHandler():
 
 # Create columns
 Base.metadata.create_all(bind=engine)
-# Session class
-Session = sessionmaker(bind=engine)
-# Creating one session instance because only this app works with database,
-# so every change is created in this session instance. 
-# In case of multiple acesses to the database better create new session 
-# when calling endpoint
-session = Session()
+
 # TODO: Create object for safe error rising 
 # CommitHandler(session=session)
 
-# user1 = UserT('Wojtek')
-# user2 = UserT('Piotr')
-# task1 = TaskT(1, 'Task 1')
-# task2 = TaskT(1, 'Task 2')
-# task3 = TaskT(2, 'Task 3')
 
-# task1.assigned_users.extend([user1, user2])
-# task2.assigned_users.append(user2)
-# task3.assigned_users.append(user1)
-# session.add(user1)
-# session.add(user2)
-# session.add(task1)
-# session.add(task2)
-# session.add(task3)
+# result = session.execute(select(UserT)).unique().scalars().all()
 
-# session.commit()
-
-results = session.query(TaskT).all()
-print(results)
-results = session.query(UserT).all()
-print(results)
+# for row in result:
+#     print(row)
 
