@@ -1,10 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Mapped, mapped_column, relationship, joinedload, Session
+from sqlalchemy.orm import sessionmaker, Mapped, mapped_column, relationship, joinedload, Session, validates
 from sqlalchemy import Date, DateTime, func, null, select, exists, insert, update
 from sqlalchemy import ForeignKey, Table, Column, String, Integer, CHAR, JSON
 from typing import Optional, List
 import datetime
+from pwhshr import Password
 
 DATABASE_URL = 'postgresql://postgres:1234@localhost/postgres'
 
@@ -37,8 +38,10 @@ user_task_association = Table(
 class UserT(Base):
     __tablename__ = 'users'
     user_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_name: Mapped[str]
-    email: Mapped[Optional[str]]
+    username: Mapped[str]
+    password: Mapped[str] = mapped_column(Password)
+    disabled: bool = True # True if user has active token, false otherwise
+    email: Mapped[str]
 
     # Many-to-Many relationship. User can be assigned to many tasks 
     # lazy='joined' used to reload relations every time form database
@@ -51,14 +54,17 @@ class UserT(Base):
     # future GUI app easier to search for assigned and created things. Maybe after loging create instance 
     # of a user with easy access to relationships and nested informations (comments etc.). Maybe create 
     # new endpoint get_user_info and return every information, every relationship for this specific user.
-    
-    def __init__(self, user_name):
-        self.user_name = user_name
+
+    def __init__(self, username, email, password):
+        self.username = username
+        self.email = email
+        self.password = password
 
     def __repr__(self):
         owned = [(task.task_id, task.title) for task in self.owned_tasks]
         assigned = [task.task_id for task in self.assigned_tasks]
-        return f'<User (user ID: {self.user_id}, user name: {self.user_name}, user owned tasks: {owned}, user assigned tasks: {assigned})>\n'
+        return f'<User (user ID: {self.user_id}, user name: {self.username}, user password: {self.password} user owned tasks: {owned}, user assigned tasks: {assigned})>\n'
+
 
 class TaskT(Base):
     __tablename__ = 'tasks'
@@ -116,13 +122,4 @@ class CommitHandler():
 
 # Create columns
 Base.metadata.create_all(bind=engine)
-
-# TODO: Create object for safe error rising 
-# CommitHandler(session=session)
-
-
-# result = session.execute(select(UserT)).unique().scalars().all()
-
-# for row in result:
-#     print(row)
 

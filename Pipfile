@@ -4,10 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-sqlalchemy = "*"
 psycopg2 = "*"
-pydantic = "*"
 fastapi = {extras = ["standard"], version = "*"}
+sqlalchemy = "*"
+pydantic = "*"
+pyjwt = "*"
 
 [dev-packages]
 
