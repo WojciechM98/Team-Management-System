@@ -1,99 +1,24 @@
 from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, model_serializer
+from typing import Optional, List, Annotated
 import datetime
 from sqlalchemy.orm import Session
 import db
-
-
-# User table models
-class UserBase(BaseModel):
-    """Base User model"""
-    user_name: str = Field(..., min_length=3, max_length=512, description='Name of a user')
-    email: Optional[str] = Field(None, description='User email adress')
-    
-class User(UserBase):
-    class AssignedTasks(BaseModel):
-        task_id: int = Field(..., description='ID of a task')
-    
-    class OwnedTasks(BaseModel):
-        task_id: int = Field(..., description='ID of a task') 
-
-    user_id: int = Field(..., description='ID of the user')
-    owned_tasks: Optional[List[OwnedTasks]] = Field(None, description='Tasks owned by user')
-    assigned_tasks: Optional[List[AssignedTasks]] = Field(None, description='Tasks assigned to user')
-
-class UserCreate(UserBase):
-    pass
-
-class UserUpdate(BaseModel):
-    user_name: Optional[str] = Field(None, min_length=3, max_length=512, description='Name of a user')
-    email: Optional[str] = Field(None, description='User email adress')
-    
-
-class UserDelete(UserBase):
-    user_id: int = Field(..., description='ID of the user')
-    detail: str = Field(default='The user deletion operation has been performed successfully. '
-                                'Tasks created by the user were deleted along with the user', 
-                        description='Information about succesfull operation')
-
-
-# Task table models
-
-class TaskBase(BaseModel):
-    title: str = Field(...,min_length=5, max_length=512, description='Title of a task')
-    description: Optional[str] = Field(None, description='Description of a task')
-    
-class Task(TaskBase):
-    task_id: int = Field(..., description='ID of a task')
-    owner_id: int = Field(..., description='ID of the user who created this task')
-    start_date: Optional[datetime.date] = Field(None, description='Task start date. '
-                                                'The default start date is the date task was created')
-    end_date: Optional[datetime.date] = Field(None, description='Task end date')
-    comments: Optional[List['Comment']] = Field(None, description='Task comments created by users')
-    assigned_users: Optional[List['User']] = Field(None, description='Users assigned to the task')
-
-class TaskAdd(TaskBase):
-    pass
-
-class TaskUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=5, max_length=512, description='Title of a task')
-    description: Optional[str] = Field(None, description='Description of a task')
-    
-    start_date: Optional[datetime.date] = Field(None, description='Task start date. '
-                                                'The default start date is the date task was created')
-    end_date: Optional[datetime.date] = Field(None, description='Task end date')
-    assigned_users: Optional[List['User']] = Field(None, description='Users assigned to the task')
-
-class TaskDelete(Task):
-    detail: str = Field(default='The task deletion operation has been performed successfully. '
-                                'The task comments were deleted along with the task.', 
-                      description='Information about succesfull operation')
-
-# Comment table models
-
-class CommentBase(BaseModel):
-    task_id: int = Field(..., description='ID of a parent task')
-    user_id: int = Field(..., description='ID of a user')
-    timestamp: datetime.datetime = Field(..., description='Date and time when comment was added')
-    comment: str = Field(..., description='Comment body')
-
-class Comment(CommentBase):
-    comment_id: int = Field(..., description='ID of a comment')
-
-class CommentUpdate(BaseModel):
-    timestamp: Optional[datetime.datetime] = Field(None, description='Date and time when comment was added')
-    comment: Optional[str] = Field(None, description='Comment body')
-
-class CommentDelete(Comment):
-    detail: str = Field(default='Comment deletion operation has been performed successfully.',
-                        description='Information about succesfull operation')
-
-
-
-
+from pwhshr import Password, PasswordHash
+from schemas import *
+import security as sc
 
 app = FastAPI()
+
+@app.post('/token')
+async def login_for_access_token(form_data: Annotated[sc.OAuth2PasswordRequestForm, Depends()],
+                                 instance: Session = Depends(db.get_session)) -> sc.Token:
+    result = sc.login_for_access_token_function(form_data, instance)
+    return result
+
+@app.get('/users/me', response_model=User)
+async def get_me(current_user: Annotated[User, Depends(sc.get_current_user)]):
+    return current_user
 
 @app.get('/users', response_model=List[User])
 def get_users(instance: Session = Depends(db.get_session)):
@@ -111,9 +36,9 @@ def get_user(user_id: int, instance: Session = Depends(db.get_session)):
     return user
 
 @app.post('/users/add', response_model=User)
-def create_user(user: str, instance: Session = Depends(db.get_session)):
+def create_user(username: str, password: str, instance: Session = Depends(db.get_session)):
     """Create new user db.UserT class by passing UserCreate variables"""
-    new_user = db.UserT(user.user_name)
+    new_user = db.UserT(username, password)
     instance.add(new_user)
     instance.commit()
     instance.refresh(new_user)
@@ -197,7 +122,9 @@ def delete_task(task_id: int, instance: Session = Depends(db.get_session)):
         raise HTTPException(status_code=404, detail='User not found. Operation rejected.')
     return task_to_del
 
+
 # API comment endopoint
+
 @app.post('/tasks/comments/add', response_model=Comment)
 def add_comment(user_id: int, task_id: int, comment: str, instance: Session = Depends(db.get_session)):
     """Add new comment in specific task"""
