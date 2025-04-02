@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from pydantic import BaseModel, Field, model_serializer
 from typing import Optional, List, Annotated
 import datetime
@@ -9,6 +9,7 @@ from schemas import *
 import security as sc
 
 app = FastAPI()
+auth = APIRouter(dependencies=[Depends(sc.get_current_user)])
 
 @app.post('/token')
 async def login_for_access_token(form_data: Annotated[sc.OAuth2PasswordRequestForm, Depends()],
@@ -16,18 +17,18 @@ async def login_for_access_token(form_data: Annotated[sc.OAuth2PasswordRequestFo
     result = sc.login_for_access_token_function(form_data, instance)
     return result
 
-@app.get('/users/me', response_model=User)
+@auth.get('/users/me', response_model=User)
 async def get_me(current_user: Annotated[User, Depends(sc.get_current_user)]):
     return current_user
 
-@app.get('/users', response_model=List[User])
+@auth.get('/users', response_model=List[User])
 def get_users(instance: Session = Depends(db.get_session)):
     """Return all items from Users table"""
     users = instance.execute(db.select(db.UserT)).unique().scalars()
     result = [user for user in users]
     return result
 
-@app.get('/users/{user_id}', response_model=User)
+@auth.get('/users/{user_id}', response_model=User)
 def get_user(user_id: int, instance: Session = Depends(db.get_session)):
     """Find user by passing user_id"""
     user = instance.execute(db.select(db.UserT).where(db.UserT.user_id == user_id)).scalar()
@@ -35,16 +36,16 @@ def get_user(user_id: int, instance: Session = Depends(db.get_session)):
         raise HTTPException(status_code=404, detail='User not found. Operation rejected.')
     return user
 
-@app.post('/users/add', response_model=User)
-def create_user(username: str, password: str, instance: Session = Depends(db.get_session)):
+@auth.post('/users/add', response_model=User)
+def create_user(username: str, email: str, password: str, instance: Session = Depends(db.get_session)):
     """Create new user db.UserT class by passing UserCreate variables"""
-    new_user = db.UserT(username, password)
+    new_user = db.UserT(username, email, password)
     instance.add(new_user)
     instance.commit()
     instance.refresh(new_user)
     return new_user
 
-@app.post('/users/update', response_model=User)
+@auth.post('/users/update', response_model=User)
 def update_user(user_id: int, params: UserUpdate, instance: Session = Depends(db.get_session)):
     """Update user"""
     user_to_update = instance.execute(db.select(db.UserT).where(db.UserT.user_id == user_id)).scalar()
@@ -54,7 +55,7 @@ def update_user(user_id: int, params: UserUpdate, instance: Session = Depends(db
     instance.commit()
     return user_to_update
 
-@app.delete('/users/delete/{user_id}', response_model=UserDelete)
+@auth.delete('/users/delete/{user_id}', response_model=UserDelete)
 def delete_user(user_id: int, instance: Session = Depends(db.get_session)):
     """Delete user by entering his ID and tasks that he owns"""
     user_to_del = instance.execute(db.select(db.UserT).where(db.UserT.user_id == user_id)).scalar()
@@ -68,7 +69,7 @@ def delete_user(user_id: int, instance: Session = Depends(db.get_session)):
 
 # API task endpoints
 
-@app.get('/tasks', response_model=List[Task])
+@auth.get('/tasks', response_model=List[Task])
 def get_tasks(instance: Session = Depends(db.get_session)):
     """Return all tasks"""
     tasks = instance.execute(db.select(db.TaskT)).unique().scalars()
@@ -76,7 +77,7 @@ def get_tasks(instance: Session = Depends(db.get_session)):
     result = [task for task in tasks]
     return result
 
-@app.get('/tasks/{task_id}', response_model=Task)
+@auth.get('/tasks/{task_id}', response_model=Task)
 def get_task(task_id: int, instance: Session = Depends(db.get_session)):
     """Return one task by entering task ID"""
     task = instance.execute(db.select(db.TaskT).where(db.TaskT.task_id == task_id)).scalar()
@@ -84,7 +85,7 @@ def get_task(task_id: int, instance: Session = Depends(db.get_session)):
         raise HTTPException(status_code=404, detail='Task not found. Operation rejected.')
     return task
 
-@app.post('/tasks/add', response_model=Task)
+@auth.post('/tasks/add', response_model=Task)
 def add_task(user_id: int, title: str, description: str, instance: Session = Depends(db.get_session)):
     """Add new task"""
     new_task = db.TaskT(user_id, title, description)
@@ -92,7 +93,7 @@ def add_task(user_id: int, title: str, description: str, instance: Session = Dep
     instance.commit()
     return new_task
 
-@app.post('/tasks/update', response_model=Task)
+@auth.post('/tasks/update', response_model=Task)
 def update_task(user_id: int, task_id: int, params: TaskUpdate, instance: Session = Depends(db.get_session)):
     """Update task"""
     user = instance.execute(db.select(db.UserT).where(db.UserT.user_id == user_id)).scalar()
@@ -111,7 +112,7 @@ def update_task(user_id: int, task_id: int, params: TaskUpdate, instance: Sessio
         instance.commit()
     return task_to_update
 
-@app.delete('/tasks/delete/{task_id}', response_model=TaskDelete)
+@auth.delete('/tasks/delete/{task_id}', response_model=TaskDelete)
 def delete_task(task_id: int, instance: Session = Depends(db.get_session)):
     """Delete task"""
     task_to_del = instance.execute(db.select(db.TaskT).where(db.TaskT.task_id == task_id)).scalar()
@@ -125,7 +126,7 @@ def delete_task(task_id: int, instance: Session = Depends(db.get_session)):
 
 # API comment endopoint
 
-@app.post('/tasks/comments/add', response_model=Comment)
+@auth.post('/tasks/comments/add', response_model=Comment)
 def add_comment(user_id: int, task_id: int, comment: str, instance: Session = Depends(db.get_session)):
     """Add new comment in specific task"""
     user = instance.execute(db.select(db.UserT).where(db.UserT.user_id == user_id)).scalar()
@@ -147,7 +148,7 @@ def add_comment(user_id: int, task_id: int, comment: str, instance: Session = De
         instance.commit()
     return new_comment
 
-@app.post('/tasks/comments/update', response_model=Comment)
+@auth.post('/tasks/comments/update', response_model=Comment)
 def update_comment(user_id: int, comment_id: int, params: CommentUpdate, instance: Session = Depends(db.get_session)):
     """Update comment"""
     user = instance.execute(db.select(db.UserT).where(db.UserT.user_id == user_id)).scalar()
@@ -164,7 +165,7 @@ def update_comment(user_id: int, comment_id: int, params: CommentUpdate, instanc
         instance.commit()
     return comment_to_update
 
-@app.delete('/tasks/comments/delete', response_model=CommentDelete)
+@auth.delete('/tasks/comments/delete', response_model=CommentDelete)
 def delete_comment(user_id: int, comment_id: int, instance: Session = Depends(db.get_session)):
     """Delete comment"""
     # Check if user exist
@@ -179,3 +180,7 @@ def delete_comment(user_id: int, comment_id: int, instance: Session = Depends(db
     instance.delete(comment_to_del)
     instance.commit()
     return comment_to_del
+
+
+
+app.include_router(auth)
