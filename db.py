@@ -40,7 +40,6 @@ class UserT(Base):
     user_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str]
     password: Mapped[str] = mapped_column(Password)
-    disabled: bool = True # True if user has active token, false otherwise
     email: Mapped[str]
 
     # Many-to-Many relationship. User can be assigned to many tasks 
@@ -63,7 +62,9 @@ class UserT(Base):
     def __repr__(self):
         owned = [(task.task_id, task.title) for task in self.owned_tasks]
         assigned = [task.task_id for task in self.assigned_tasks]
-        return f'<User (user ID: {self.user_id}, user name: {self.username}, user password: {self.password} user owned tasks: {owned}, user assigned tasks: {assigned})>\n'
+        return f'<User (user ID: {self.user_id}, user name: {self.username}, '\
+               f'user password: {self.password} user owned tasks: {owned}, '\
+               f'user assigned tasks: {assigned}, dissabled: {self.disabled})>\n'
 
 
 class TaskT(Base):
