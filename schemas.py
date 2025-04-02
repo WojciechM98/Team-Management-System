@@ -6,14 +6,6 @@ from sqlalchemy.orm import Session
 import db
 from pwhshr import Password, PasswordHash
 
-# Security tables
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    username: str | None = None
-
 # User table models
 class UserBase(BaseModel):
     """Base User model"""

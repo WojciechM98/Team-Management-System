@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 import jwt
-from jwt import InvalidTokenError
+from jwt import InvalidTokenError, ExpiredSignatureError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
@@ -13,10 +13,10 @@ import db
 from pwhshr import PasswordHash
 
 
-load_dotenv()
+load_dotenv(override=True)
 SECRET_KEY = os.getenv('SECRET_KEY')
 ALGORITHM = os.getenv('ALGORITHM')
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES'))
+ACCESS_TOKEN_EXPIRE = int(os.getenv('ACCESS_TOKEN_EXPIRE'))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 
@@ -71,7 +71,7 @@ def authenticate_user(email: str, password: str, instance: Session):
     return user
 
 
-
+# NOTE: Maybe divide this function for checking token
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], 
                            instance: Session = Depends(db.get_session)):
     credentials_exception = HTTPException(
@@ -85,6 +85,8 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],
         if email is None:
             raise credentials_exception
         token_data = TokenData(email=email)
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=403, detail='Token expired')
     except InvalidTokenError:
         raise credentials_exception
     user = get_user_by_email(token_data.email, instance)
@@ -92,9 +94,11 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],
         raise credentials_exception
     return user
 
-async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]):
-    if current_user.disabled: # In db user.disable must be true to work
-        raise HTTPException(status_code=400, detail='Inactive user')
+# NOTE: No need for this function because token expiration is handled in get_current_user
+# async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]):
+#     if current_user.disabled: # In db user.disable must be False to work
+#         raise HTTPException(status_code=400, detail='Inactive user')
+#     return current_user
 
 def login_for_access_token_function(form_data: OAuth2PasswordRequestForm, instance: Session):
     user = authenticate_user(form_data.username, form_data.password, instance) # NOTE: Here search in DB for account (by email or name)
@@ -104,7 +108,7 @@ def login_for_access_token_function(form_data: OAuth2PasswordRequestForm, instan
             detail='Could not validate credentials',
             headers={'WWW-Authenticate': 'Bearer'},
         )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE)
     access_token = create_access_token(
         data={'sub': user.email}, expires_delta=access_token_expires
     ) # For 'sub': user.email because email is used to login
