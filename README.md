@@ -84,14 +84,6 @@ Add following environment variables:
 You have just prepared the environment and downloaded all the dependencies. All that is left is to create a local database using postgresql. A great postgresql installation guide is [here](https://www.w3schools.com/postgresql/postgresql_install.php)
 
 Now everything is setup and ready to go!
-
-## Test run
-
-To run the application, simply run:
-
-```bash
-  fastapi dev main.py
-```
 ## OAuth2 user authentication
 The authentication process uses Bearer **JWT (JSON Web Tokens)**. FastAPI has a built-in **OAuth2** authorization protocol, which was used in this case.
 The code below shows the user authorization route using the *OAuth2PasswordRequestForm* form included by FastAPI.
@@ -125,3 +117,40 @@ class PasswordHash():
         return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 ```
 easily perform the operation of creating a new password and verifying the plain text password with the user's password stored in the database.
+## Test run
+
+To run the application, simply run:
+
+```bash
+  fastapi dev main.py
+```
+
+The following examples show how the application works.
+
+Creating new user
+
+![create_user](https_link)
+
+Logging in to the newly created account
+
+![login](https_link)
+
+Show all users
+
+![show_users](https_link)
+
+Creating a new task
+
+![new_task](https_link)
+
+Assigning user to task
+
+![assign_user_to_task](https_link)
+
+Adding a comment to a task
+
+![new_comment](https_link)
+
+Show all tasks
+
+![show_tasks](https_link)
