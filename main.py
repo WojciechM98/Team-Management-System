@@ -103,6 +103,7 @@ def get_task(task_id: int, instance: Session = Depends(db.get_session)):
 @auth.post('/tasks/add', response_model=Task)
 def add_task(user_id: int, title: str, description: str, instance: Session = Depends(db.get_session)):
     """Add new task"""
+    find_user_in_db(user_id, instance=instance)
     new_task = db.TaskT(user_id, title, description)
     instance.add(new_task)
     instance.commit()

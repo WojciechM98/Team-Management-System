@@ -9,6 +9,7 @@ fastapi = {extras = ["standard"], version = "*"}
 sqlalchemy = "*"
 pydantic = "*"
 pyjwt = "*"
+bcrypt = "*"
 
 [dev-packages]
 

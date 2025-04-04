@@ -2,3 +2,6 @@
 create_db.py
 todo.txt
 __pycache__
+demo/*.webm
+demo/*.sh
+demo/palette.png
