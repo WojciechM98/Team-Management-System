@@ -1,3 +1,4 @@
 .env
 create_db.py
 todo.txt
+__pycache__
