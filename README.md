@@ -66,6 +66,10 @@ Now create a .env file that will store the environment variables used during OAu
 
 Add following environment variables:
 
+`DATABASE_USER = <string>` - database username
+
+`DATABASE_PASSWORD = <string>` - database password
+
 `SECRET_KEY = <string>` - a string used to sign JWT tokens. To generate proper `SECRET_KEY` use:
 ```bash
   openssl rand -hex 32
@@ -73,26 +77,14 @@ Add following environment variables:
 
 `ALGORITHM = "HS256"` - algorithm used to sign the JWT token
 
-`ACCESS_TOKEN_EXPIRE = 15` - constant to set expiration time in minutes
+`ACCESS_TOKEN_EXPIRE = <integer>` - constant to set expiration time in minutes
 
 ### Create database
 
 You have just prepared the environment and downloaded all the dependencies. All that is left is to create a local database using postgresql. A great postgresql installation guide is [here](https://www.w3schools.com/postgresql/postgresql_install.php)
 
-
-After installation, you only need to change some data in *db.py*
-```python
-from pwhshr import Password
-
-DATABASE_URL = 'postgresql://your_postrgres_user:your_postrgres_password@localhost/postgres'
-
-engine = create_engine(DATABASE_URL, echo=True)
-```
-Where: 
-- `your_postrgres_user` is a database user
-- `your_postrgres_password` is a database password
-
 Now everything is setup and ready to go!
+
 ## Test run
 
 To run the application, simply run:

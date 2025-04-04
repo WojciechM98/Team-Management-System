@@ -1,3 +1,0 @@
-Task management:
-    create pydentic classes
-    create api endpoints,

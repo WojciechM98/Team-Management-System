@@ -6,8 +6,13 @@ from sqlalchemy import ForeignKey, Table, Column, String, Integer, CHAR, JSON
 from typing import Optional, List
 import datetime
 from pwhshr import Password
+import os
+from dotenv import load_dotenv
 
-DATABASE_URL = 'postgresql://postgres:1234@localhost/postgres'
+load_dotenv(override=True)
+DATABASE_USER = os.getenv('DATABASE_USER')
+DATABASE_PASSWORD = os.getenv('DATABASE_PASSWORD')
+DATABASE_URL = f'postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}@localhost/postgres'
 
 engine = create_engine(DATABASE_URL, echo=True)
 
@@ -64,7 +69,7 @@ class UserT(Base):
         assigned = [task.task_id for task in self.assigned_tasks]
         return f'<User (user ID: {self.user_id}, user name: {self.username}, '\
                f'user password: {self.password} user owned tasks: {owned}, '\
-               f'user assigned tasks: {assigned}, dissabled: {self.disabled})>\n'
+               f'user assigned tasks: {assigned})>\n'
 
 
 class TaskT(Base):
