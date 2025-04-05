@@ -129,7 +129,7 @@ The following examples show how the application works.
 
 Creating new user
 
-![create_user](https_link)
+![create_user](https://github.com/WojciechM98/Task-Management-System/blob/main/demo/create_user.gif)
 
 Logging in to the newly created account
 
@@ -137,20 +137,20 @@ Logging in to the newly created account
 
 Show all users
 
-![show_users](https_link)
+![show_users](https://github.com/WojciechM98/Task-Management-System/blob/main/demo/show_users.gif)
 
 Creating a new task
 
-![new_task](https_link)
+![new_task](https://github.com/WojciechM98/Task-Management-System/blob/main/demo/new_task.gif)
 
 Assigning user to task
 
-![assign_user_to_task](https_link)
+![assign_user_to_task](https://github.com/WojciechM98/Task-Management-System/blob/main/demo/assign_user_to_task.gif)
 
 Adding a comment to a task
 
-![new_comment](https_link)
+![new_comment](https://github.com/WojciechM98/Task-Management-System/blob/main/demo/new_comment.gif)
 
 Show all tasks
 
-![show_tasks](https_link)
+![show_tasks](https://github.com/WojciechM98/Task-Management-System/blob/main/demo/show_tasks.gif)
