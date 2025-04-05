@@ -133,7 +133,7 @@ Creating new user
 
 Logging in to the newly created account
 
-![login](https_link)
+![login](https://github.com/WojciechM98/Task-Management-System/blob/main/demo/login.gif)
 
 Show all users
 
