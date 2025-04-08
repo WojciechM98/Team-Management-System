@@ -4,14 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-psycopg2 = "*"
-fastapi = {extras = ["standard"], version = "*"}
-sqlalchemy = "*"
 pydantic = "*"
-pyjwt = "*"
+sqlalchemy = "*"
+dotenv = "*"
+jwt = "*"
 bcrypt = "*"
+fastapi = {extras = ["standard"], version = "*"}
+psycopg2 = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.10"
+python_version = "3.12"
